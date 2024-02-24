@@ -74,3 +74,20 @@ This research sheds light on the nuanced relationship between temperature variat
 
 **Acknowledgments:**
 I extend my gratitude to the open-source community and the developers of the Hugging Face Transformers library for their invaluable contributions to natural language processing research.
+
+# Exploring Temperature Variation for Tailored Language Model Training
+
+## Introduction
+This repository contains code for exploring the impact of temperature variation on language model training. By adjusting temperature settings within a defined range, we aim to develop specialized language models optimized for creative expression and factual precision.
+
+## Setup
+1. Clone this repository to your local machine.
+2. Install the required dependencies by running `pip install -r requirements.txt`.
+3. Download the pre-trained language model from Hugging Face Transformers using the specified model name or path.
+
+## Usage
+### Generating Text Outputs
+Run the following command to generate text outputs using the trained language model:
+
+```bash
+python generate_text.py --input_file input.json --output_file output.json --creative
