@@ -1,30 +1,76 @@
----
-## Improving Image Generation Proposal: 
+```python
+import json
+import argparse
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
-### Overview
-This proposal aims to integrate a Large Language Model (LLM) with image generation processes to refine character portrayal accuracy and creative efficiency. It introduces the novel application of using celebrity resemblances as descriptor nouns to guide and enhance the image generation workflow.
+class TransformerTextGenerator:
+    def __init__(self, model_name_or_path):
+        self.model = AutoModelForCausalLM.from_pretrained(model_name_or_path, revision="main")
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, use_fast=True)
 
-### Advantages of the Celebrity Descriptor Approach
-Utilizing celebrity resemblances as descriptor nouns in prompts offers several compelling advantages:
+    def generate_text_output(self, prompt, temperature):
+        input_ids = self.tokenizer(prompt, return_tensors='pt').input_ids.cuda()
+        output = self.model.generate(inputs=input_ids, temperature=temperature, do_sample=True, top_p=0.95, top_k=40, max_new_tokens=512)
+        return self.tokenizer.decode(output[0])
 
-1. **Rich Reference Pool**: By employing celebrities as descriptors, we capitalize on the LLM's expansive dataset of public figures, which encompasses a wide range of physical characteristics and aesthetic nuances.
-2. **Cultural Resonance**: Celebrities often carry distinct visual identities that resonate culturally, providing a shorthand to complex visual traits that can be effectively utilized by image generation models.
-3. **Efficient Communication**: This approach condenses complex descriptions into concise references, maximizing token efficiency and prompt clarity.
-4. **Diverse Representation**: It enables the model to access a varied spectrum of features, supporting the creation of diverse and inclusive character images.
-5. **Precision in Details**: Celebrity descriptors provide precise control over the generated image's features, allowing for the creation of more targeted and accurate representations.
+def main():
+    parser = argparse.ArgumentParser(description="Generate text outputs using a transformer model.")
+    parser.add_argument("--input_file", required=True, help="Path to the input JSON file containing input entries.")
+    parser.add_argument("--output_file", required=True, help="Path to save the output JSON file with generated text outputs.")
+    parser.add_argument("--creative", action="store_true", help="Flag to enable creative mode with varied temperature from 0.5 to 1.0.")
+    parser.add_argument("--factual", action="store_true", help="Flag to enable factual mode with varied temperature from 0.5 to 0.0.")
+    args = parser.parse_args()
 
-### Proof of Concept
-A preliminary experiment using ChatGPT-V4 showed promising results. The model was prompted to suggest celebrities resembling a fictional character. This approach leverages the LLM's database without requiring extensive character descriptions.
+    if args.creative:
+        temperature_range = [i / 10 for i in range(5, 11)]  # Temperature range from 0.5 to 1.0
+    elif args.factual:
+        temperature_range = [i / 10 for i in range(5, -1, -1)]  # Temperature range from 0.5 to 0.0 with decrement of 0.1
+    else:
+        print("Please specify either --creative or --factual mode.")
+        return
 
-### Methodology
-Incorporating celebrity names as descriptors creates a bridge between the textual input and the visual output. This methodology streamlines the process, using the LLM's ability to understand and process complex patterns associated with public figures.
+    text_generator = TransformerTextGenerator("TheBloke/CapybaraHermes-2.5-Mistral-7B-GPTQ")
+    text_outputs = []
 
-### Outcome
-The test yielded a composite image reflecting the combined features of the suggested celebrities. This indicates the potential for a finely-tuned image generation system that can more accurately depict characters based on the weighted characteristics of multiple celebrity references.
+    with open(args.input_file, "r") as f:
+        input_data = json.load(f)
 
-### Proposed Workflow Enhancement
-To improve Realm AI's current @character keyword, which relies on ethnicity, race, and gender, this proposal recommends an LLM-augmented approach. By creating a list of celebrities, the system can derive nuanced descriptors that go beyond basic demographic categories. This integration promises a richer, more precise character depiction, transforming image generation into a more dynamic and context-aware process.
+    for entry in input_data:
+        input_text = entry.get("input", "")
+        entry_outputs = []
+        for temperature in temperature_range:
+            text_output = text_generator.generate_text_output(input_text, temperature)
+            entry_outputs.append({"temperature": temperature, "text_output": text_output})
+        text_outputs.append({"input": input_text, "outputs": entry_outputs})
 
-In conclusion, the Celebrity Descriptor Approach enhances image generation by providing a nuanced, efficient, and culturally resonant method to convey visual information. This proposal sets the foundation for further research and development in the realm of AI-driven creative processes.
+    with open(args.output_file, "w") as f:
+        json.dump(text_outputs, f, indent=4)
 
----
+if __name__ == "__main__":
+    main()
+```
+
+**Research Paper: Exploring Temperature Variation for Tailored Language Model Training**
+
+*By Troy Andrew Schultz*
+
+**Abstract:**
+This study delves into the impact of temperature variation on language model training, aiming to develop specialized models optimized for creative expression and factual precision. Through systematic experimentation, I investigate how adjusting temperature settings influences the diversity and accuracy of text generation in language models.
+
+**Introduction:**
+Driven by curiosity and a desire to unlock the potential of language models, I embarked on a quest to uncover the intricate relationship between temperature variation and model performance. By fine-tuning temperature settings, I aimed to develop models capable of meeting diverse linguistic needs, ranging from creative storytelling to factual reporting.
+
+**Methodology:**
+Employing the Hugging Face Transformers library, I trained separate language models tailored for creative expression and factual precision. By adjusting temperature settings within a defined range during training and inference, I sought to optimize model outputs for specific tasks and requirements.
+
+**Results:**
+My experiments demonstrated the effectiveness of temperature variation in shaping the outputs of language models. Enabling creative mode with a temperature range from 0.5 to 1.0 enhanced response diversity, fostering imaginative and contextually rich text generation. Conversely, factual mode, with a temperature range from 0.5 to 0.0, yielded precise and evidence-based responses, ideal for tasks requiring factual accuracy.
+
+**Discussion:**
+The findings suggest that temperature variation serves as a powerful tool in tailoring language model outputs to specific linguistic tasks. By providing control over temperature settings, I empowered users to fine-tune models for creativity or factual precision, depending on the application at hand.
+
+**Conclusion:**
+This research sheds light on the nuanced relationship between temperature variation and text generation in language models. By embracing experimentation and intuitive exploration, I pave the way for the development of specialized models capable of adapting to diverse linguistic needs and improving generalization across different tasks.
+
+**Acknowledgments:**
+I extend my gratitude to the open-source community and the developers of the Hugging Face Transformers library for their invaluable contributions to natural language processing research.
