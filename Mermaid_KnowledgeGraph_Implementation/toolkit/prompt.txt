@@ -1,0 +1,57 @@
+import subprocess
+import os
+import tempfile
+
+class MermaidDiagramGenerator:
+    def __init__(self, theme='dark', background='transparent'):
+        self._theme = theme
+        self._background = background
+        self._cache_dir = os.path.join(os.getcwd(), 'cache')
+        os.makedirs(self._cache_dir, exist_ok=True)
+
+    def convert_to_image(self, input_source):
+        mermaid_code = self._read_content(input_source)
+        clean_code = self._remove_mermaid_block_markers(mermaid_code)
+        output_path = os.path.join(self._cache_dir, "output.png")
+        self._generate_image_from_code(clean_code, output_path)
+        return output_path
+
+    def _is_file(self, input_source):
+        return os.path.isfile(input_source)
+
+    def _read_content(self, input_source):
+        if self._is_file(input_source):
+            with open(input_source, 'r') as file:
+                return file.read()
+        return input_source
+
+    def _remove_mermaid_block_markers(self, code):
+        code_lines = code.strip().splitlines()
+        if code_lines[0].startswith("```mermaid") and code_lines[-1] == "```":
+            return "\n".join(code_lines[1:-1]).strip()
+        return code
+
+    def _generate_image_from_code(self, mermaid_code, output_path):
+        with tempfile.NamedTemporaryFile(delete=False, mode='w', suffix='.mmd') as temp_file:
+            temp_file.write(mermaid_code)
+            input_path = temp_file.name
+        subprocess.run(["mmdc", "-i", input_path, "-o", output_path, "-t", self._theme, "-b", self._background], check=True)
+        os.remove(input_path)
+
+if __name__ == "__main__":
+    generator = MermaidDiagramGenerator()
+
+    input_sources = ["MermaidGraph_0.txt", "MermaidGraph_1.txt"]  # Paths to Mermaid graph files
+    current_source_index = 0
+
+    try:
+        while True:  # Infinite loop to alternate between input sources
+            input_source = input_sources[current_source_index]
+            print(f"Generating diagram from: {input_source}")
+            image_path = generator.convert_to_image(input_source)
+            print(f"Diagram image created at: {image_path}")
+            current_source_index = (current_source_index + 1) % len(input_sources)
+    except KeyboardInterrupt:
+        print("Live Mermaid flow map generation stopped.")
+    except Exception as e:
+        print(f"Error: {e}")
