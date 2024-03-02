@@ -66,6 +66,8 @@ def generate_unique_responses(prompt, base_temperatures, stream, generator, entr
 
     ### Response:
     ```mermaid
+    graph TD;
+
     """.format(input=prompt)
     url = "http://127.0.0.1:5000/v1/completions"
     headers = {"Content-Type": "application/json"}
@@ -76,7 +78,7 @@ def generate_unique_responses(prompt, base_temperatures, stream, generator, entr
         while True:
             data = {
                 "prompt": prompt_template,
-                "max_tokens": 2048,
+                "max_tokens": 4096,
                 "temperature": temp,
                 "top_p": 1.0,
                 "seed": -1,
@@ -89,11 +91,23 @@ def generate_unique_responses(prompt, base_temperatures, stream, generator, entr
             response = requests.post(url, headers=headers, json=data, verify=False)
             response_text = response.json()['choices'][0]['text'].strip()
 
-            if response_text not in unique_outputs:
+            # Remove ```mermaid and ``` markers if present
+            if response_text.startswith("```mermaid"):
+                response_text = response_text[len("```mermaid"):].strip()
+            if response_text.endswith("```"):
+                response_text = response_text[:-len("```")].strip()
+
+            # Ensure the Mermaid code starts with 'graph TD;' for both image generation and dataset entry
+            mermaid_code_for_image = "graph TD;\n" + response_text
+            formatted_response_text = "'''mermaid\ngraph TD;\n" + response_text + "\n'''"
+
+            if mermaid_code_for_image not in unique_outputs:
                 try:
-                    image_path = generator.convert_to_image(response_text, entry_number, output_number)
+                    # Convert the Mermaid code to an image
+                    image_path = generator.convert_to_image(mermaid_code_for_image, entry_number, output_number)
                     print(f"Mermaid diagram generated at: {image_path}")
-                    unique_outputs.add(response_text)
+
+                    unique_outputs.add(mermaid_code_for_image)  # Add the Mermaid code to the set to avoid duplicates
                     break
                 except ValueError as e:
                     print(f"Validation failed, retrying... Error: {e}")
@@ -101,12 +115,12 @@ def generate_unique_responses(prompt, base_temperatures, stream, generator, entr
             else:
                 temp += 0.1  # Adjust temperature if output is not unique
 
-        dataset_entry = {
-            "input": prompt,
-            "output": response_text,
-            "temperature": temp
-        }
-        dataset_entries.append(dataset_entry)
+            dataset_entry = {
+                "input": prompt,
+                "output": formatted_response_text,  # Use the formatted Mermaid code for the dataset entry
+                "temperature": temp
+            }
+            dataset_entries.append(dataset_entry)
 
     return dataset_entries
 
