@@ -5,11 +5,6 @@ import requests
 import subprocess
 import tempfile
 
-# This script integrates the MermaidDiagramGenerator into the main pipeline, generating and validating Mermaid diagrams for each unique response. 
-# If a diagram generation fails, it adjusts the temperature and retries until a valid diagram is produced or all attempts are exhausted. 
-# Each valid diagram is saved as a PNG in the "Entries" folder with a filename reflecting its entry and output number. 
-# The script writes to the JSON file after processing each input, ensuring that the data is incrementally saved.
-
 ##### MermaidDiagramGenerator Class #####
 class MermaidDiagramGenerator:
     def __init__(self, theme='dark', background='transparent'):
@@ -53,24 +48,12 @@ def read_input(input_source):
     else:
         return [{"input": input_source}]
 
-def generate_unique_responses(prompt, base_temperatures, stream, generator, entry_number):
-    prompt_template = """
-    Below is an instruction that describes a task, paired with an input that provides further context.
-    Write a response that appropriately completes the request.
+def generate_response(prompt, base_temperatures, stream, generator, entry_number, unique_outputs):
+    prompt_template = f"{prompt}\n\n```mermaid\n"
 
-    ### Instruction:
-    Create the mermaid diagram for the following input:
-
-    ### Input:
-    {input}
-
-    ### Response:
-    ```mermaid
-    """.format(input=prompt)
     url = "http://127.0.0.1:5000/v1/completions"
     headers = {"Content-Type": "application/json"}
     dataset_entries = []
-    unique_outputs = set()
 
     for output_number, temp in enumerate(base_temperatures, start=1):
         while True:
@@ -80,14 +63,18 @@ def generate_unique_responses(prompt, base_temperatures, stream, generator, entr
                 "temperature": temp,
                 "top_p": 1.0,
                 "seed": -1,
-                "top_k": 42,
-                "repetition_penalty": 1.042,
-                "typical_p": 1.042,
+                "top_k": 4,
+                "repetition_penalty": 1.0,
+                "guidance_scale": 1.0,
+                "typical_p": 1.0,
                 "stream": stream,
             }
 
             response = requests.post(url, headers=headers, json=data, verify=False)
             response_text = response.json()['choices'][0]['text'].strip()
+
+            if response_text.endswith("```"):  # Check if response ends with ```
+                response_text = response_text[:-3].strip()  # Remove ``` from the end
 
             if response_text not in unique_outputs:
                 try:
@@ -97,31 +84,37 @@ def generate_unique_responses(prompt, base_temperatures, stream, generator, entr
                     break
                 except ValueError as e:
                     print(f"Validation failed, retrying... Error: {e}")
-                    temp += 0.1  # Adjust temperature and retry if Mermaid diagram is invalid
             else:
                 temp += 0.1  # Adjust temperature if output is not unique
 
         dataset_entry = {
             "input": prompt,
-            "output": response_text,
+            "output": f"```mermaid\n{response_text}\n```",
             "temperature": temp
         }
         dataset_entries.append(dataset_entry)
 
     return dataset_entries
 
+def generate_unique_responses(input_data, base_temperatures, stream, generator):
+    all_entries = []
+    unique_outputs = set()
+
+    for entry_number, entry in enumerate(input_data, start=1):
+        prompt = entry.get("input", "")
+        if prompt:
+            entries = generate_response(prompt, base_temperatures, stream, generator, entry_number, unique_outputs)
+            all_entries.extend(entries)  # Extend the list with new entries
+
+    return all_entries
+
 def main(input_source, stream=False):
     generator = MermaidDiagramGenerator()
     input_data = read_input(input_source)
     base_temperatures = [i / 10 for i in range(5, 11)]  # Adjusted for batch of unique outputs per input
     output_file = "output.json"
-    all_entries = []  # Initialize an empty list to store all entries
 
-    for entry_number, entry in enumerate(input_data, start=1):
-        prompt = entry.get("input", "")
-        if prompt:
-            entries = generate_unique_responses(prompt, base_temperatures, stream, generator, entry_number)
-            all_entries.extend(entries)  # Extend the list with new entries
+    all_entries = generate_unique_responses(input_data, base_temperatures, stream, generator)
 
     # Write all entries to the JSON file at once
     with open(output_file, "w") as f:
